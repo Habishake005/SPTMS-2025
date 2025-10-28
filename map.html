@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ESP32 Live GPS Tracker with History</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <style>
+    #map {
+      height: 600px;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+
+<h2>ESP32 Live GPS Tracker with History</h2>
+<div id="map"></div>
+
+<script>
+  // ThingSpeak Channel Details
+  var channelID = "3051314";
+  var apiKey = "Y0GSME0D11BGJ53X9"; // leave empty if public
+  var latField = 1; // field number for Latitude
+  var lonField = 2; // field number for Longitude
+
+  var map = L.map('map').setView([0, 0], 2);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(map);
+
+  var marker = L.marker([0, 0]).addTo(map);
+  var path = L.polyline([], {color: 'red'}).addTo(map);
+
+  async function updateGPS() {
+    let url = `https://api.thingspeak.com/channels/${channelID}/feeds.json?results=20&api_key=${apiKey}`;
+    let response = await fetch(url);
+    let data = await response.json();
+    
+    let feeds = data.feeds;
+    let coordinates = [];
+
+    feeds.forEach(feed => {
+      let lat = parseFloat(feed[`field${latField}`]);
+      let lon = parseFloat(feed[`field${lonField}`]);
+      if (!isNaN(lat) && !isNaN(lon)) {
+        coordinates.push([lat, lon]);
+      }
+    });
+
+    if (coordinates.length > 0) {
+      let latest = coordinates[coordinates.length - 1];
+      marker.setLatLng(latest);
+      map.setView(latest, 15);
+      marker.bindPopup(`<b>Lat:</b> ${latest[0]}<br><b>Lon:</b> ${latest[1]}<br><b>Signals Shown:</b> ${coordinates.length}`).openPopup();
+      path.setLatLngs(coordinates); // draw path for previous signals
+    }
+  }
+
+  setInterval(updateGPS, 10000); // update every 10s
+  updateGPS();
+</script>
+
+</body>
+</html>

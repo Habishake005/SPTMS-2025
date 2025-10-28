@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Public Transport Tracker</title>
+
+<!-- Leaflet CSS & JS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<style>
+  html, body {
+    height: 100%;
+    margin: 0;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)),
+                url('{{ url_for("static", filename="image.png") }}') no-repeat center center fixed;
+    background-size: cover;
+    color: #fff;
+  }
+
+  header {
+    background-color: rgba(233, 235, 238, 0.85);
+    color: black;
+    padding: 20px 25px;
+    border-radius: 0 0 8px 8px;
+    text-align: left;
+  }
+  header .emoji { font-size: 40px; margin-right: 10px; }
+  header .greeting { font-size: 52px; font-weight: bold; color: rgb(1,1,22); }
+  header .welcome-text { font-size: 34px; margin-top: 5px; color: black; }
+  header .sub-text { font-size: 32px; color: black; }
+
+  .main-container {
+    display: flex;
+    height: calc(100% - 160px);
+    gap: 20px;
+    padding: 10px 20px 20px 20px;
+  }
+
+  #leftPanel, #rightPanel {
+    border-radius: 12px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    background-color: white;
+    padding: 15px;
+  }
+
+  #map {
+    height: 100%;
+    width: 100%;
+    border-radius: 10px;
+  }
+
+  #leftPanel {
+    flex: 1.3;
+    height: 100%;
+  }
+
+  #rightPanel {
+    flex: 1.2;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow-y: auto;
+    background: url('{{ url_for("static", filename="bus_bg.png") }}') no-repeat center center;
+    background-size: cover;
+    border-radius: 12px;
+    position: relative;
+    padding: 15px;
+    color: #fff;
+  }
+
+  #rightPanel h2 {
+    text-align: center;
+    font-size: 24px;
+    color: #1a73e8;
+    margin-bottom: 15px;
+  }
+
+  .tab-container {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+
+  .tab {
+    flex: 1;
+    padding: 10px;
+    background: rgba(255,255,255,0.1);
+    text-align: center;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s ease;
+  }
+  .tab.active { background: linear-gradient(90deg,#ff9800,#e65100); box-shadow: 0 4px 12px rgba(255,152,0,0.6); color: #fff; }
+  .tab:hover { transform: scale(1.05); }
+
+  .info-card {
+    background: rgba(255,255,255,0.05);
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 12px;
+  }
+
+  .crowd-container {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-around;
+    height: 180px;
+    margin-top: 15px;
+  }
+
+  .crowd-bar-vertical {
+    width: 40px;
+    height: 100%;
+    background: rgba(255,255,255,0.1);
+    border-radius: 8px;
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+
+  .crowd-fill-vertical {
+    width: 100%;
+    background: linear-gradient(to top,#ff9800,#e65100);
+    border-radius: 8px 8px 0 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    font-size: 12px;
+    color:#fff;
+    font-weight:bold;
+    transition: height 0.6s ease;
+    padding-top:2px;
+  }
+
+  @media (max-width: 768px) {
+    header .greeting { font-size: 28px; }
+    header .welcome-text { font-size: 18px; }
+    header .sub-text { font-size: 16px; }
+    .main-container { flex-direction: column; height: auto; }
+    #map { min-height: 350px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="emoji">👋</span>
+  <span class="greeting">Hi, {{ user }}</span>
+  <div class="welcome-text">Welcome to Bus Tracking Systems 🚌</div>
+  <div class="sub-text">Real-time tracking & smooth travel</div>
+</header>
+
+<div class="main-container">
+  <!-- Left Panel: Map -->
+  <div id="leftPanel">
+    <div id="map"></div>
+  </div>
+
+  <!-- Right Panel: Info -->
+  <div id="rightPanel">
+    <h2>Vehicle Info</h2>
+    <div class="tab-container">
+      <div class="tab active" data-vehicle="RemoteCar">Remote Car</div>
+      <div class="tab" data-vehicle="20A">20A</div>
+      <div class="tab" data-vehicle="90A">90A</div>
+      <div class="tab" data-vehicle="KMS">KMS</div>
+      <div class="tab" data-vehicle="SRT">SRT</div>
+    </div>
+
+    <div id="vehicleDetails" class="info-card"></div>
+    <h3 style="margin-top:10px; text-align:center;">Crowd Level</h3>
+    <div id="crowdGraph" class="crowd-container"></div>
+  </div>
+</div>
+
+<script>
+  // Initialize map
+  var map = L.map('map').setView([11.0168, 76.9558], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(map);
+
+  var marker = null;
+  var path = L.polyline([], { color: 'red' }).addTo(map);
+  var gpsInterval = null;
+
+  var buses = {
+    "RemoteCar": {source:"Central Bus Stand", dest:"Saibaba Colony", timing:"7:30 AM - 10:30 AM", crowd:65},
+    "20A": {source:"Gandhipuram", dest:"Saibaba Colony", timing:"8:00 AM - 11:00 AM", crowd:40},
+    "90A": {source:"Town Hall", dest:"Gandhipuram", timing:"9:00 AM - 12:00 PM", crowd:80},
+    "KMS": {source:"Coimbatore Junction", dest:"Peelamedu", timing:"10:00 AM - 1:00 PM", crowd:50},
+    "SRT": {source:"Saibaba Colony", dest:"RS Puram", timing:"11:00 AM - 2:00 PM", crowd:70}
+  };
+
+  function updateGPS() {
+    fetch(`https://api.thingspeak.com/channels/3051314/feeds.json?results=20&api_key=Y0GSME0D11BGJ53X9`)
+      .then(res => res.json())
+      .then(data => {
+        let coords = [];
+        data.feeds.forEach(feed => {
+          let lat = parseFloat(feed.field1);
+          let lon = parseFloat(feed.field2);
+          if (!isNaN(lat) && !isNaN(lon)) coords.push([lat, lon]);
+        });
+        if (coords.length > 0) {
+          let latest = coords[coords.length - 1];
+          if (!marker) {
+            marker = L.marker(latest).addTo(map);
+          } else {
+            marker.setLatLng(latest);
+          }
+          map.setView(latest, 15);
+          marker.bindPopup(`<b>Lat:</b> ${latest[0]}<br><b>Lon:</b> ${latest[1]}`).openPopup();
+          path.setLatLngs(coords);
+        }
+      })
+      .catch(err => console.error("GPS fetch error:", err));
+  }
+
+  function clearTracking() {
+    if (gpsInterval) clearInterval(gpsInterval);
+    gpsInterval = null;
+    if (marker) {
+      map.removeLayer(marker);
+      marker = null;
+    }
+    path.setLatLngs([]);
+  }
+
+  function showBusDetails(vehicle) {
+    let details = document.getElementById("vehicleDetails");
+    let crowdGraph = document.getElementById("crowdGraph");
+    let bus = buses[vehicle];
+
+    details.innerHTML = `
+      <p><strong>Bus Name:</strong> ${vehicle}</p>
+      <p><strong>Source:</strong> ${bus.source}</p>
+      <p><strong>Destination:</strong> ${bus.dest}</p>
+      <p><strong>Timing:</strong> ${bus.timing}</p>
+    `;
+
+    crowdGraph.innerHTML = `
+      <div class="crowd-bar-vertical">
+        <div class="crowd-fill-vertical" style="height:${bus.crowd}%">${bus.crowd}%</div>
+      </div>
+    `;
+
+    clearTracking(); // stop previous tracking
+
+    if (vehicle === "RemoteCar") {
+      updateGPS();
+      gpsInterval = setInterval(updateGPS, 10000);
+    }
+  }
+
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      showBusDetails(tab.getAttribute('data-vehicle'));
+    });
+  });
+
+  // Default load
+  showBusDetails("RemoteCar");
+</script>
+</body>
+</html>
