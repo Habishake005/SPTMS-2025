@@ -4,20 +4,30 @@ import secrets
 import time
 import os
 from dotenv import load_dotenv
+import logging
 
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 tokens = {}
 
 @app.route('/')
 def home():
-    return redirect(url_for('login'))
+    logger.info("Home route accessed")
+    return redirect(url_for('login')) 
+
+@app.route('/health')
+def health():
+    return {'status': 'ok'}, 200
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    logger.info(f"Login route accessed: {request.method}")
     if request.method == 'POST':
         email = request.form['email']
         token = secrets.token_urlsafe(16)
