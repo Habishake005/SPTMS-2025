@@ -35,6 +35,12 @@ def login():
 
     return render_template("login.html")
 
+@app.route('/map.html')
+def map_page():
+    if 'user' in session:
+        return render_template("map.html")
+    else:
+        return redirect(url_for('login'))
 
 @app.route('/verify/<token>')
 def verify(token):
