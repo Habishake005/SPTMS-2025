@@ -26,7 +26,8 @@ def login():
         tokens[token] = {'email': email, 'expiry': expiry}
 
         #Use production base URL if available
-        base_url = os.environ.get("BASE_URL", "https://sptms202526.onrender.com")
+        base_url = os.environ.get("BASE_URL", "https://sptms-2526.onrender.com")
+        #base_url = os.environ.get("BASE_URL", "http://localhost:5000")
         link = f"{base_url}/verify/{token}"
 
         send_email(email, link)
